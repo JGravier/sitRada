@@ -3,3 +3,5 @@
 .RData
 .Ruserdata
 *.png
+Recuperation_coord_X_Y/data/*.Rmd
+Recuperation_coord_X_Y/data/*.docx
