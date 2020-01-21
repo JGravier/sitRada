@@ -1,2 +1,2 @@
-*.Rmd
-*.docx
+/data*.Rmd
+/data*.docx
