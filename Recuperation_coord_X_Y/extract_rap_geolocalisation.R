@@ -7,7 +7,7 @@ library(tmap) # package de visualisation spatiale dynamique
 rap_picardie <- read_table("data/RAP.txt") # lire le tableau de données
 rap_picardie_df <- rap_picardie %>%
   rename(variable = `Étude par Dépt. Commune Site Responsable Datation`) %>%
-  separate(col = variable, c("Etude", "Departement", "Commune", "Description"), sep = " ", remove = FALSE) %>%
+  separate(col = variable, c("Etude", "Departement", "Commune"), sep = " ", remove = FALSE) %>%
   # séparation des premiers éléments en 4 colonnes afin de récupérer le nom des communes et des département
   mutate(hdf = "Hauts-de-France, France", # création d'une colonne avec informations complémentaires spatiales
          lieux = str_c(Commune, Departement, hdf, sep = ", ")) # concaténation des colonnes liées aux noms des communes, dép, région et pays
