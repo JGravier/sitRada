@@ -16,6 +16,12 @@ rap_geoloca_sf <- st_as_sf(x = rap_geoloca, coords = c("lon", "lat")) %>% # cons
   st_set_crs(4326) %>%
   st_transform(crs = 2154) # transformation du système de coordonnées en Lambert 93
 
+
+# visualisation de la localisation des études caropologiques de manière dynamique
+tmap_mode("view")
+tm_shape(rap_geoloca_sf) +
+  tm_bubbles(size = 0.4, col = "darkorange")
+
 # export en .shp
 st_write(rap_geoloca_sf, "data/geoloca_etudes_carpo_RAP25.shp")
 
@@ -38,8 +44,3 @@ ggplot() +
         axis.text.y = element_blank(),
         axis.ticks = element_blank()) +
   ggspatial::annotation_scale(location = "tr",  width_hint = 0.5)
-
-# visualisation de la localisation des études caropologiques de manière dynamique
-tmap_mode("view")
-tm_shape(rap_geoloca_sf) +
-  tm_bubbles(size = 0.4, col = "darkorange")
