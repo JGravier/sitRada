@@ -1,0 +1,25 @@
+---
+title: "Récupérer automatiquement des coordonnées en R à partir de nom de lieux"
+author: "Julie Gravier"
+date: "27/01/2020"
+output: word_document
+---
+Que ce soit pour une présentation dans un colloque, la réalisation d’un cours ou plus largement dans un projet de reprise de données existantes, nous avons souvent le souhait de cartographier la répartition des objets archéologiques – au sens large – mis au jour et analysés. Toutefois, il est assez fréquent que la documentation à partir de laquelle nous puissions créer ces cartes soit présentée dans le cadre de publications sous forme de tableaux ou de listes énumératives, sans précision des latitudes et
+longitudes des objets étudiés. Leurs géolocalisations est généralement faite manuellement, point par point, lieu par lieu, dans un SIG. Le problème principal de cette procédure tient au fait que sa probabilité de réalisation est quasi inversement proportionnelle au volume de données à traiter et au temps que l’on détient… La boîte à outils a pour objectif de présenter comment peut-on récupérer des coordonnées de manière automatique afin de réduire le temps et l’ingratitude de ce travail.
+
+
+### Packages nécessaires
+```{r, include=TRUE, warning=FALSE}
+library(tidyverse)
+# devtools::install_github(repo = 'rCarto/photon') # package développé pour faire le lien entre R et l'API Photon
+library(photon)
+library(sf) # package spatial
+library(tmap) # package de visualisation spatiale dynamique
+```
+
+## Importer et adapter les données
+À partir du bilan sur la Protohistoire récente en Picardie publié par François Malrain, Stéphane Godefroy et Frédéric Gransar et du tableau recensant les études carpologiques réalisées, nous allons récupérer les coordonnées des lieux d'où proviennent les échantillonnages caropologiques. Plus précisément, le tableau de la publication recense les auteur.e.s ayant réalisé l'étude, le département d'appartenance du site archéologique, la commune, le nom du site, le.s responsable.s de l'opération archéo, la datation associée à l'échantillon caropologique. Hélas, compte tenu de la manière dont a été encodé le .pdf, il est relativement peu aisé d'exploiter le .pdf via R. Il est ainsi plus rapide de copier-coller préalablement le tableau dans un .txt (intitulé "RAP.txt" dans le dossier "data").
+
+```{r, include=TRUE, warning=FALSE}
+rap_picardie <- read_table("data/RAP.txt") # lire le tableau de données
+```
