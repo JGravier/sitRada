@@ -9,7 +9,7 @@ longitudes des objets étudiés. Leurs géolocalisations est généralement fait
 
 
 ### Packages nécessaires
-```{r, include=TRUE, warning=FALSE}
+```{r, include=TRUE, message=FALSE}
 library(tidyverse)
 # devtools::install_github(repo = 'rCarto/photon') # package développé pour faire le lien entre R et l'API Photon
 library(photon)
@@ -20,6 +20,75 @@ library(tmap) # package de visualisation spatiale dynamique
 ## Importer et adapter les données
 À partir du bilan sur la Protohistoire récente en Picardie publié par François Malrain, Stéphane Godefroy et Frédéric Gransar et du tableau recensant les études carpologiques réalisées, nous allons récupérer les coordonnées des lieux d'où proviennent les échantillonnages caropologiques. Plus précisément, le tableau de la publication recense les auteur.e.s ayant réalisé l'étude, le département d'appartenance du site archéologique, la commune, le nom du site, le.s responsable.s de l'opération archéo, la datation associée à l'échantillon caropologique. Hélas, compte tenu de la manière dont a été encodé le .pdf, il est relativement peu aisé d'exploiter le .pdf via R. Il est ainsi plus rapide de copier-coller préalablement le tableau dans un .txt (intitulé "RAP.txt" dans le dossier "data").
 
-```{r, include=TRUE, warning=FALSE}
+```{r, include=TRUE, message=FALSE}
 rap_picardie <- read_table("data/RAP.txt") # lire le tableau de données
+head(rap_picardie)
 ```
+  
+Le tableau contient une seule colonne de type _character_. On va ainsi séparer les éléments en différentes colonnes, sachant que l'on souhaite récupérer les informations sur la commune (et le département) dans laquelle a eu lieu l'opération archéologique.
+
+```{r, include=TRUE, message=FALSE, warning=FALSE}
+rap_picardie_df <- rap_picardie %>%
+  rename(variable = `Étude par Dépt. Commune Site Responsable Datation`) %>%
+  separate(col = variable, c("Etude", "Departement", "Commune"), sep = " ", remove = FALSE) %>%
+  # séparation des premiers éléments en 3 colonnes afin de récupérer le nom des communes et des départements
+  mutate(hdf = "Hauts-de-France, France", # création d'une colonne avec informations complémentaires spatiales
+         lieux = str_c(Commune, Departement, hdf, sep = ", ")) # concaténation des colonnes liées aux noms des communes, dép, région et pays
+```
+
+Deux choses sont importantes à noter dans le code ci-dessus :  
+1. la fontion _rename()_ n'est pas nécessaire ici. Elle permet uniquement d'avoir un nom de variable court dans la 2e ligne de code pour que ce dernier soit plus lisible lorsque l'on travaille sur petit écran ;  
+2. nous avons créé une colonne __lieux__ contenant le nom de la commune, le département, la région actuelle (Hauts-de-France) et le pays (France). C'est cette colonne qui nous servira à faire le géocodage des lieux d'où proviennent les échantillons caropologiques. L'ajout d'information (région & pays) sert en tant que contrainte spatiale dans la recherche des cordonnées lors de l'utilisation de l'API Photon. En effet, par exemple, plusieurs communes ont le même nom en France. Sans contrainte de recherche dans la région Hauts-de-France, il est possible que le résultat de la recherche automatique soit relatif à une commune située en dehors de la région.  
+
+## Géocodage et vérification de sa validité
+```{r, include=TRUE, message=FALSE, warning=FALSE}
+rap_geoloca <- geocode(location = rap_picardie_df$lieux, key = "place", limit = 1) # récupération des coordonnées avec photon
+rap_geoloca_sf <- st_as_sf(x = rap_geoloca, coords = c("lon", "lat")) %>% # construction d'un objet "sf"
+  st_set_crs(4326) %>% # les coordonnées récupérées sont el lon/lat, WGS 84
+  st_transform(crs = 2154) # transformation du système de coordonnées en Lambert 93
+```
+
+Une fois que l'on a récupérer les coordonnées et créé un objet _sf_, soit un objet spatial dans R (voir en particulier Pebesma, E., 2018. Simple Features for R: Standardized Support for Spatial Vector Data. The R Journal 10 (1), 439-446, https://doi.org/10.32614/RJ-2018-009), on va pouvoir vérifier la validité des coordonnées de manière dynamique avec _tmap_
+
+```{r, message=FALSE, warning=FALSE, results="hide"}
+## tmap_mode("view") # mode dynamique
+## ici le mode dynamique n'est pas actionné du fait que l'on écrit un Rmarkdown
+tm_shape(rap_geoloca_sf) + # le "shape" (objet sf)
+  tm_bubbles(size = 0.4, col = "darkorange") # type de visualisation
+```
+
+Si l'on est satisfait, on peut exporter l'objet _sf_ en .shp :  
+```{r, include=TRUE, message=FALSE, warning=FALSE}
+st_write(rap_geoloca_sf, "data/geoloca_etudes_carpo_RAP25.shp")
+```
+
+## Cartographie
+Enfin, on peut cartographier les résultats pour notre futur conférence, cours, publication, etc.
+
+#### Imports des fonds de carte
+```{r, message=FALSE, warning=FALSE, results="hide"}
+sf_fond_europe <- read_sf("data/geom_eu34_nuts13.shp") %>% # fond Europe
+  st_transform(crs = 2154) # en Lambert 93
+france <- read_sf("data/REGION.shp") %>% # fond des régions françaises actuelles
+  st_transform(crs = 2154) # en Lambert 93
+
+## zoom sur notre zone d'étude
+bbox_haut_de_france <- st_bbox(france %>% filter(INSEE_REG == "32")) # 32 étant le code des Hauts-de-France
+```
+
+#### Carte
+```{r, message=FALSE, warning=FALSE, results="hide"}
+ggplot() + 
+  geom_sf(data = sf_fond_europe, fill = "grey98", color = "grey98") +
+  geom_sf(data = france, fill = "grey98", color = "grey40") +
+  geom_sf(data = rap_geoloca_sf, color = "grey30", fill = "#e66101", shape = 21, size = 2) +
+  coord_sf(xlim = bbox_haut_de_france[c(1,3)], ylim = bbox_haut_de_france[c(2,4)]) +
+  ggthemes::theme_igray() +
+  labs(subtitle = "Les études carpologiques réalisées en Picardie en 2005",
+       caption = "J. Gravier 2020 | LabEx DynamiTe, UMR Géographie-cités.\nSources : Malrain, Gaudefroy, Gransar 2005") +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank()) +
+  ggspatial::annotation_scale(location = "tr",  width_hint = 0.5)
+```
+
