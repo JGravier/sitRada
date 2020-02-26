@@ -8,7 +8,7 @@ fichiers <- list.files(pattern = "pdf$")
 # chaque page d'un pdf correspond à une chaîne de caractère
 fichiers <- lapply(fichiers, pdf_text)
 
-# on veut découper les chaîne de caractères en autant de "lignes" qu'il y en a dans les pdf au départ :
+# on veut découper les chaînes de caractères en autant de "lignes" qu'il y en a dans les pdf au départ :
 data <- lapply(fichiers, function(x) strsplit(x, split = "\r\n")) %>% 
   unlist() %>%
   as.data.frame()
@@ -79,8 +79,16 @@ data <- tranfo_tableaux(data)
 
 
 # création d'un tableau (data.frame) contenant les éléments des n listes
-data <- purrr::map(data, ~bind_rows(.x)) %>% 
-  bind_rows()
+data <- purrr::map(data, ~bind_rows(.x)) %>% bind_rows()
+
+# Enlever les espaces présents avant et après les chaînes de character :
+data <- data %>%
+  as_tibble(data) %>%
+  rowid_to_column() %>%
+  pivot_longer(cols = V1:V35, names_to = "nom", values_to = "valeurs") %>%
+  mutate(valeurs = str_trim(string = valeurs, side = c("both"))) %>%
+  pivot_wider(id_cols = rowid, names_from = "nom", values_from = "valeurs") %>%
+  select(-rowid)
 
 # nommer les colonnes selon les informations de la première ligne
 colnames(data) <- data[1,]
@@ -89,8 +97,7 @@ colnames(data) <- data[1,]
 # parmi toutes ces informations, seules certaines nous intéressent :
 # virer toutes les lignes relatives aux noms de colonnes
 data <- data %>%
-  as_tibble() %>%
-  mutate(filtre_1 = str_detect(`   AHRS Number`, "AHRS Number")) %>% # détection de contenant
+  mutate(filtre_1 = str_detect(`AHRS Number`, "AHRS Number")) %>% # détection de contenant
   filter(filtre_1 != TRUE) %>% # suppression des lignes contenant l'expression "AHRS Number"
   select(-filtre_1) # on supprime la colonne
 
@@ -99,7 +106,7 @@ data <- data[seq(1, nrow(data), 2),]
 
 
 # récupération des Lat, Long dans deux colonnes différentes
-extract_lat_long <- str_split_fixed(string = data$`   Point Representation`, pattern = ",", n = 2) %>% as.data.frame()
+extract_lat_long <- str_split_fixed(string = data$`Point Representation`, pattern = ",", n = 2) %>% as.data.frame()
 extract_lat <- str_split_fixed(string = extract_lat_long$V1, pattern = ":", n = 2) %>% as.data.frame()
 extract_long <- str_split_fixed(string = extract_lat_long$V2, pattern = ":", n = 2) %>% as.data.frame()
 
@@ -107,7 +114,7 @@ lat_long <- data.frame(lat = extract_lat$V2,
                        long = extract_long$V2)
 
 data <- bind_cols(data, lat_long) %>%
-  select(-`   Point Representation`)
+  select(-`Point Representation`)
 
 rm(extract_lat, extract_lat_long, extract_long, lat_long)
 
