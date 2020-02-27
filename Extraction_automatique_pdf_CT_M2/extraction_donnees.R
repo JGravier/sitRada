@@ -86,7 +86,7 @@ data <- data %>%
   as_tibble() %>% # fait un tiblle
   rowid_to_column() %>% # ajout d'une colonne qui nous servira d'identifiant pour pivoter le tableau
   pivot_longer(cols = V1:V35, names_to = "nom", values_to = "valeurs") %>% # format long de tableau
-  mutate(valeurs = str_trim(string = valeurs, side = c("both"))) %>% # supprime les espace avant et après : both
+  mutate(valeurs = str_trim(string = valeurs, side = c("both"))) %>% # supprime les espaces avant et après : both
   pivot_wider(id_cols = rowid, names_from = "nom", values_from = "valeurs") %>% # format wide de tableau
   select(-rowid) # on supprime les identifiants qui sont ici inutiles
 
@@ -101,7 +101,7 @@ data <- data %>%
   filter(filtre_1 != TRUE) %>% # suppression des lignes contenant l'expression "AHRS Number"
   select(-filtre_1) # on supprime la colonne de détection qui n'a pas d'utilité pour la suite
 
-# sélection enfin d'une ligne sur deux de notra tableau :
+# sélection enfin d'une ligne sur deux du tableau :
 data <- data[seq(from = 1, to = nrow(data), by = 2),]
 
 
