@@ -19,7 +19,7 @@ data <- as_tibble(data)
 
 # on récupère les patterns récurrents à tous les pdf et utiles dans l'analyse plus tard
 # solution transformée à partir de : https://community.rstudio.com/t/multiple-str-detect-or-loop/25413/3
-mes_patter_a_garder <- c("AHRS Number:", "Site Name:", "Associations:", "Informal Associations:",
+mes_pattern_a_garder <- c("AHRS Number:", "Site Name:", "Associations:", "Informal Associations:",
                          "Location Info:", "Location Reliability:", "Mapsheet(s):", "Point Representation:",
                          "Geometry Accuracy:", "AHRS Resource Nature:", "Resnat Subtype:", "Resource Keywords:",
                          "Acreage:", "Period(s):", "Associated Dates:", "Cultural Affiliation:", "Current Function(s):",
@@ -37,7 +37,7 @@ detect_a_garder <- function(x, texte){
 data <- data %>%
   # test de contenu de pattern ou non par ligne
   # résultat du test inclu dans une nouvelle colonne dénommée "a_virer"
-  mutate(a_virer = mes_patter_a_garder %>% 
+  mutate(a_virer = mes_pattern_a_garder %>% 
            map( ~ detect_a_garder(.x, texte = lignes)) %>% 
            pmap_lgl(all)) %>%
   filter(!a_virer) %>% # virer les TRUE
