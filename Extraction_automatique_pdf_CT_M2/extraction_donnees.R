@@ -81,14 +81,14 @@ data <- tranfo_tableaux(data)
 # création d'un tableau (data.frame) contenant les éléments des n listes
 data <- purrr::map(data, ~bind_rows(.x)) %>% bind_rows()
 
-# Enlever les espaces présents avant et après les chaînes de character :
+# Enlever les espaces présents avant et après toutes les chaînes de character contenues dans les 35 variables :
 data <- data %>%
-  as_tibble(data) %>%
-  rowid_to_column() %>%
-  pivot_longer(cols = V1:V35, names_to = "nom", values_to = "valeurs") %>%
-  mutate(valeurs = str_trim(string = valeurs, side = c("both"))) %>%
-  pivot_wider(id_cols = rowid, names_from = "nom", values_from = "valeurs") %>%
-  select(-rowid)
+  as_tibble() %>% # fait un tiblle
+  rowid_to_column() %>% # ajout d'une colonne qui nous servira d'identifiant pour pivoter le tableau
+  pivot_longer(cols = V1:V35, names_to = "nom", values_to = "valeurs") %>% # format long de tableau
+  mutate(valeurs = str_trim(string = valeurs, side = c("both"))) %>% # supprime les espace avant et après : both
+  pivot_wider(id_cols = rowid, names_from = "nom", values_from = "valeurs") %>% # format wide de tableau
+  select(-rowid) # on supprime les identifiants qui sont ici inutiles
 
 # nommer les colonnes selon les informations de la première ligne
 colnames(data) <- data[1,]
@@ -99,13 +99,13 @@ colnames(data) <- data[1,]
 data <- data %>%
   mutate(filtre_1 = str_detect(`AHRS Number`, "AHRS Number")) %>% # détection de contenant
   filter(filtre_1 != TRUE) %>% # suppression des lignes contenant l'expression "AHRS Number"
-  select(-filtre_1) # on supprime la colonne
+  select(-filtre_1) # on supprime la colonne de détection qui n'a pas d'utilité pour la suite
 
-# sélection d'une ligne sur deux :
-data <- data[seq(1, nrow(data), 2),]
+# sélection enfin d'une ligne sur deux de notra tableau :
+data <- data[seq(from = 1, to = nrow(data), by = 2),]
 
 
-# récupération des Lat, Long dans deux colonnes différentes
+# récupération des Lat, Long dans deux colonnes différentes pour simplifier la manipulation spatiale ensuite :
 extract_lat_long <- str_split_fixed(string = data$`Point Representation`, pattern = ",", n = 2) %>% as.data.frame()
 extract_lat <- str_split_fixed(string = extract_lat_long$V1, pattern = ":", n = 2) %>% as.data.frame()
 extract_long <- str_split_fixed(string = extract_lat_long$V2, pattern = ":", n = 2) %>% as.data.frame()
