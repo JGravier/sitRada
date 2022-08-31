@@ -5,6 +5,7 @@ library(SnowballC)
 library(tm)
 library(tidytext)
 library(patchwork)
+library(readxl)
 
 tmap_mode(mode = "view")
 
@@ -220,38 +221,132 @@ ngrams_2_quartier %>%
 ggsave(filename = "sorties/bigram.png", plot = last_plot(), device = "png", width = 18, height = 22, units = "cm")
 
 
-# tdf_quartiers <- text_table %>%
-#   mutate(detectquartier = str_detect(string = revue_description, pattern = "quartier")) %>%
-#   filter(detectquartier == TRUE) %>%
-#   mutate(revue_description = stringi::stri_trans_general(str = revue_description, id = "Latin-ASCII")) %>%
-#   tidytext::unnest_tokens(output = word, input = revue_description, drop = TRUE) %>%
-#   anti_join(x = ., y = stop_words, by = "word") %>%
-#   anti_join(get_stopwords(language = "fr")) %>%
-#   count(id, word, sort = TRUE) %>%
-#   ungroup() %>%
-#   bind_tf_idf(word, id, n) %>%
-#   arrange(desc(tf_idf))
-# 
-# tdf_quartiers %>%
-#   left_join(x = ., y = final_sf %>% select(-description)) %>%
-#   st_as_sf(.) %>%
-#   st_transform(x = ., crs = 2154)
-# 
-# tdf_quartiers %>%
-#   group_by(id) %>%
-#   top_n(15) %>%
-#   ungroup() %>%
-#   ggplot(aes(word, tf_idf, fill = id)) +
-#   geom_col(show.legend = FALSE) +
-#   labs(x = NULL, y = "tf-idf") +
-#   facet_wrap(~id, ncol = 2, scales = "free") +
-#   coord_flip()
+#### land cover and bigrams ####
+bigram_spatial <- text_table %>%
+  mutate(detectquartier = str_detect(string = revue_description, pattern = "quartier")) %>%
+  filter(detectquartier == TRUE) %>%
+  mutate(revue_description = stringi::stri_trans_general(str = revue_description, id = "Latin-ASCII")) %>%
+  tidytext::unnest_tokens(output = bigrams, input = revue_description, token = "ngrams", n = 2, drop = TRUE) %>%
+  separate(data = ., col = bigrams, into = c("word", "mot 2")) %>% 
+  anti_join(x = ., y = stop_words, by = "word") %>%
+  anti_join(get_stopwords(language = "fr")) %>%
+  rename(mot = word, word = `mot 2`) %>%
+  anti_join(x = ., y = stop_words, by = "word") %>%
+  anti_join(get_stopwords(language = "fr")) %>%
+  mutate(bigrams = paste0(mot, " ", word)) %>%
+  mutate(detectquartier = str_detect(string = bigrams, pattern = "quartier")) %>%
+  filter(detectquartier == TRUE)
 
 
+bigram_spatial <- bigram_spatial %>%
+  left_join(x = ., y = data_inrap_wide %>%
+              select(id, issued) %>%
+              mutate(issued = as.character(issued)) %>%
+              mutate(issued = qdapRegex::ex_between(issued, 'list(issued = \"', '\"'),
+                     issued = as.numeric(issued)), 
+            by = "id")
 
 
+# CLC data
+CLC_2006 <- st_read(dsn = "CLCover/CLC06_FR_RGF.shp")
+CLC_2018 <- st_read(dsn = "CLCover/CLC18_FR.shp")
+referentiel_CLC_niv1 <- read_excel(path = "CLCover/clc-nomenclature-c_1.xls", sheet = "nomenclature_clc_niveau_1")
+referentiel_CLC_niv2 <- read_excel(path = "CLCover/clc-nomenclature-c_1.xls", sheet = "nomenclature_clc_niveau_2")
+referentiel_CLC_niv3 <- read_excel(path = "CLCover/clc-nomenclature-c_1.xls", sheet = "nomenclature_clc_niveau_3")
+
+CLC_2006 <- CLC_2006 %>%
+  mutate(niv1 = str_sub(CODE_06, 1, 1)) %>%
+  mutate(niv2 = str_sub(CODE_06, 1, 2)) %>%
+  left_join(y = referentiel_CLC_niv1 %>%
+              select(-libelle_en:-bleu) %>%
+              rename(libelle_niv1 = libelle_fr), by = c("niv1" = "code_clc_niveau_1")) %>%
+  left_join(y = referentiel_CLC_niv2 %>%
+              select(-libelle_en) %>%
+              rename(libelle_niv2 = libelle_fr), by = c("niv2" = "code_clc_niveau_2")) %>%
+  left_join(y = referentiel_CLC_niv3 %>%
+              select(-libelle_en) %>%
+              rename(libelle_niv3 = libelle_fr), by = c("CODE_06" = "code_clc_niveau_3")) %>%
+  mutate(libelle_reconstitue = case_when(
+    CODE_06 %in% c('111', '112') ~ libelle_niv3,
+    niv2 %in% "12" ~ libelle_niv2,
+    TRUE ~ libelle_niv1
+  ))
+
+CLC_2018 <- CLC_2018 %>%
+  mutate(niv1 = str_sub(CODE_18, 1, 1)) %>%
+  mutate(niv2 = str_sub(CODE_18, 1, 2)) %>%
+  left_join(y = referentiel_CLC_niv1 %>%
+              select(-libelle_en:-bleu) %>%
+              rename(libelle_niv1 = libelle_fr), by = c("niv1" = "code_clc_niveau_1")) %>%
+  left_join(y = referentiel_CLC_niv2 %>%
+              select(-libelle_en) %>%
+              rename(libelle_niv2 = libelle_fr), by = c("niv2" = "code_clc_niveau_2")) %>%
+  left_join(y = referentiel_CLC_niv3 %>%
+              select(-libelle_en) %>%
+              rename(libelle_niv3 = libelle_fr), by = c("CODE_18" = "code_clc_niveau_3")) %>%
+  mutate(libelle_reconstitue = case_when(
+    CODE_18 %in% c('111', '112') ~ libelle_niv3,
+    niv2 %in% "12" ~ libelle_niv2,
+    TRUE ~ libelle_niv1
+  ))
 
 
+# construction du dataset: within opération (bigram) in CLC depending on dates
+# le plus simple: 2 datasets, then filter on date
+bigram_spatial_2006 <- bigram_spatial %>%
+  mutate(issued2 = if_else(issued > 2000 & issued <= 2013, 2006, 2018)) %>%
+  filter(issued2 == 2006) %>%
+  st_as_sf() %>%
+  st_transform(x = ., crs = 2154) %>%
+  st_join(x = ., y = CLC_2006, join = st_within)
+
+bigram_spatial_2018 <- bigram_spatial %>%
+  mutate(issued2 = if_else(issued > 2000 & issued <= 2013, 2006, 2018)) %>%
+  filter(issued2 == 2018) %>%
+  st_as_sf() %>%
+  st_transform(x = ., crs = 2154) %>%
+  st_join(x = ., y = CLC_2018, join = st_within)
+
+bigram_spatial_CLC <- bind_rows(bigram_spatial_2006 %>% select(id, description, bigrams, libelle_reconstitue, issued),
+                                bigram_spatial_2018 %>% select(id, description, bigrams, libelle_reconstitue, issued))
+
+bigram_spatial_CLC <- bigram_spatial_CLC %>%
+  filter(!is.na(libelle_reconstitue))
+
+bigram_spatial_CLC_grp <- bigram_spatial_CLC %>%
+  st_drop_geometry() %>%
+  group_by(bigrams, libelle_reconstitue) %>%
+  count() %>%
+  ungroup()
+
+a <- bigram_spatial_CLC_grp %>%
+  mutate(libelle_reconstitue = if_else(libelle_reconstitue == "Zones industrielles ou commerciales et réseaux de communication",
+                                       "Zones industrielles ou commerciales", false = libelle_reconstitue)) %>%
+  filter(n > 1) %>%
+  ggplot(mapping = aes(x = libelle_reconstitue, y = bigrams, size = n, color = n)) +
+  geom_point() +
+  theme_bw() +
+  theme(axis.title = element_blank(), axis.text.x = element_text(angle = 90)) +
+  scale_color_viridis_c() +
+  labs(title = "Bigrams et types d'espace")
+
+
+b <- bigram_spatial_CLC_grp %>%
+  mutate(libelle_reconstitue = if_else(libelle_reconstitue == "Zones industrielles ou commerciales et réseaux de communication",
+                                       "Zones industrielles ou commerciales", false = libelle_reconstitue)) %>%
+  filter(n > 1) %>%
+  filter(bigrams != "quartier saint") %>%
+  ggplot(mapping = aes(x = libelle_reconstitue, y = bigrams, size = n, color = n)) +
+  geom_point() +
+  theme_bw() +
+  theme(axis.title = element_blank(), axis.text.x = element_text(angle = 90)) +
+  scale_color_viridis_c() +
+  labs(caption = "J. Gravier 2022\ndata: INRAP, Ariadne portal, CORINE Land Cover\n@_AFUrbain", 
+       title = 'sans "quartier saint"')
+
+a + b + plot_annotation(title = "Occupation du sol actuelle et vocabulaire employé dans les résumés")
+
+ggsave(filename = "sorties/bigram-espace.png", plot = last_plot(), device = "png", width = 35, height = 22, units = "cm")
 
 
 

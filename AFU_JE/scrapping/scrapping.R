@@ -111,8 +111,7 @@ for (thispage in 1:8){
 }
 
 # exportation des data en JSON
-write(x = jsonlite::toJSON(final_list), file = "export_data_scrapping_ariadne_inrap.JSON")
-
+write(x = jsonlite::toJSON(liste_de_results), file = "export_ISIDORE_publication_archeo_quartier_title.JSON")
 
 
 
